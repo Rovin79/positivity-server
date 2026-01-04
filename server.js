@@ -1,37 +1,38 @@
 const express = require("express");
 const http = require("http");
 const { Server } = require("socket.io");
-const cors = require("cors");
 
 const app = express();
-app.use(cors());
-
 const server = http.createServer(app);
 const io = new Server(server, {
   cors: {
     origin: "*",
-    methods: ["GET", "POST"]
-  }
+  },
 });
 
-let connectedUsers = {}; // socketId -> username
+const onlineUsers = {}; // socket.id -> username
 
 io.on("connection", (socket) => {
   console.log("User connected:", socket.id);
 
-  socket.on("set_username", (username) => {
-    connectedUsers[socket.id] = username;
-    io.emit("users", Object.entries(connectedUsers).map(([id, name]) => ({ id, name })));
+  socket.on("join", (username) => {
+    onlineUsers[socket.id] = username;
+    console.log("User joined:", username);
+
+    io.emit("users", Object.values(onlineUsers));
   });
 
-  socket.on("send_message", (data) => {
-    // data: { to, fromId, fromName, message }
-    io.to(data.to).emit("receive_message", data);
+  socket.on("private_message", (data) => {
+    socket.broadcast.emit("private_message", {
+      from: onlineUsers[socket.id],
+      message: data.message,
+    });
   });
 
   socket.on("disconnect", () => {
-    delete connectedUsers[socket.id];
-    io.emit("users", Object.entries(connectedUsers).map(([id, name]) => ({ id, name })));
+    console.log("User disconnected:", onlineUsers[socket.id]);
+    delete onlineUsers[socket.id];
+    io.emit("users", Object.values(onlineUsers));
   });
 });
 
