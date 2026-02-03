@@ -9,35 +9,24 @@ const io = new Server(server, {
   cors: { origin: "*" },
 });
 
-const users = {}; // username -> socket.id
+const onlineUsers = {}; // socket.id -> username
 
 io.on("connection", (socket) => {
   const username = socket.handshake.query.username;
 
-  if (!username) return;
+  console.log("Socket connected:", socket.id, username);
 
-  users[username] = socket.id;
-  console.log(`${username} connected`);
-
-  io.emit("users", Object.keys(users));
-
-  socket.on("private_message", ({ to, text }) => {
-    const targetSocket = users[to];
-    if (targetSocket) {
-      io.to(targetSocket).emit("private_message", {
-        from: username,
-        text,
-      });
-    }
-  });
+  if (username) {
+    onlineUsers[socket.id] = username;
+    io.emit("users", Object.values(onlineUsers));
+  }
 
   socket.on("disconnect", () => {
-    delete users[username];
-    io.emit("users", Object.keys(users));
-    console.log(`${username} disconnected`);
+    delete onlineUsers[socket.id];
+    io.emit("users", Object.values(onlineUsers));
   });
 });
 
-server.listen(3000, () =>
-  console.log("✅ Server running on port 3000")
-);
+server.listen(3000, () => {
+  console.log("Server running on port 3000");
+});
