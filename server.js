@@ -6,56 +6,38 @@ const app = express();
 const server = http.createServer(app);
 
 const io = new Server(server, {
-  cors: {
-    origin: "*",
-  },
+  cors: { origin: "*" },
 });
 
-const onlineUsers = {}; // socket.id -> username
+const users = {}; // username -> socket.id
 
 io.on("connection", (socket) => {
   const username = socket.handshake.query.username;
 
-  if (!username) {
-    console.log("Connection rejected: no username");
-    return;
-  }
+  if (!username) return;
 
-  onlineUsers[socket.id] = username;
-  console.log("User joined:", username);
+  users[username] = socket.id;
+  console.log(`${username} connected`);
 
-  // 🔁 broadcast users
-  io.emit("users", Object.values(onlineUsers));
+  io.emit("users", Object.keys(users));
 
-  // 🌍 Global message
-  socket.on("global_message", (text) => {
-    io.emit("global_message", {
-      user: username,
-      text,
-    });
-  });
-
-  // 💬 Private message
-  socket.on("private_message", ({ to, message }) => {
-    const targetSocketId = Object.keys(onlineUsers).find(
-      (id) => onlineUsers[id] === to
-    );
-
-    if (targetSocketId) {
-      io.to(targetSocketId).emit("private_message", {
+  socket.on("private_message", ({ to, text }) => {
+    const targetSocket = users[to];
+    if (targetSocket) {
+      io.to(targetSocket).emit("private_message", {
         from: username,
-        message,
+        text,
       });
     }
   });
 
   socket.on("disconnect", () => {
-    console.log("User left:", username);
-    delete onlineUsers[socket.id];
-    io.emit("users", Object.values(onlineUsers));
+    delete users[username];
+    io.emit("users", Object.keys(users));
+    console.log(`${username} disconnected`);
   });
 });
 
-server.listen(3000, () => {
-  console.log("Server running on port 3000");
-});
+server.listen(3000, () =>
+  console.log("✅ Server running on port 3000")
+);
