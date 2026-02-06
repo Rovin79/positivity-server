@@ -9,7 +9,8 @@ const io = new Server(server, {
   cors: { origin: "*" },
 });
 
-const onlineUsers = {}; // socket.id -> username
+// username -> socket.id
+const users = {};
 
 io.on("connection", (socket) => {
   const username = socket.handshake.query.username;
@@ -17,13 +18,32 @@ io.on("connection", (socket) => {
   console.log("Socket connected:", socket.id, username);
 
   if (username) {
-    onlineUsers[socket.id] = username;
-    io.emit("users", Object.values(onlineUsers));
+    users[username] = socket.id;
+    io.emit("users", Object.keys(users));
   }
 
+  // 🔐 PRIVATE MESSAGE HANDLER
+  socket.on("private_message", ({ to, from, message }) => {
+    console.log("Private message:", { to, from, message });
+
+    const targetSocketId = users[to];
+    if (targetSocketId) {
+      io.to(targetSocketId).emit("private_message", {
+        from,
+        message,
+      });
+    }
+  });
+
   socket.on("disconnect", () => {
-    delete onlineUsers[socket.id];
-    io.emit("users", Object.values(onlineUsers));
+    for (const user in users) {
+      if (users[user] === socket.id) {
+        delete users[user];
+        break;
+      }
+    }
+    io.emit("users", Object.keys(users));
+    console.log("Socket disconnected:", socket.id);
   });
 });
 
