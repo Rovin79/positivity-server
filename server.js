@@ -9,8 +9,7 @@ const io = new Server(server, {
   cors: { origin: "*" },
 });
 
-// username -> socket.id
-const users = {};
+const onlineUsers = {}; // socket.id -> username
 
 io.on("connection", (socket) => {
   const username = socket.handshake.query.username;
@@ -18,15 +17,18 @@ io.on("connection", (socket) => {
   console.log("Socket connected:", socket.id, username);
 
   if (username) {
-    users[username] = socket.id;
-    io.emit("users", Object.keys(users));
+    onlineUsers[socket.id] = username;
+    io.emit("users", Object.values(onlineUsers));
   }
 
-  // 🔐 PRIVATE MESSAGE HANDLER
+  // ✅ PRIVATE MESSAGE HANDLER
   socket.on("private_message", ({ to, from, message }) => {
     console.log("Private message:", { to, from, message });
 
-    const targetSocketId = users[to];
+    const targetSocketId = Object.keys(onlineUsers).find(
+      (id) => onlineUsers[id] === to
+    );
+
     if (targetSocketId) {
       io.to(targetSocketId).emit("private_message", {
         from,
@@ -35,15 +37,15 @@ io.on("connection", (socket) => {
     }
   });
 
+  // ✅ GLOBAL MESSAGE (optional)
+  socket.on("global_message", ({ from, text }) => {
+    io.emit("global_message", { user: from, text });
+  });
+
   socket.on("disconnect", () => {
-    for (const user in users) {
-      if (users[user] === socket.id) {
-        delete users[user];
-        break;
-      }
-    }
-    io.emit("users", Object.keys(users));
-    console.log("Socket disconnected:", socket.id);
+    console.log("User disconnected:", onlineUsers[socket.id]);
+    delete onlineUsers[socket.id];
+    io.emit("users", Object.values(onlineUsers));
   });
 });
 
